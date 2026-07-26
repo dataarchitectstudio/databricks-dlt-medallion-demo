@@ -1,0 +1,17 @@
+{
+  "name": "orders_medallion_demo_every_5min",
+  "schedule": {
+    "quartz_cron_expression": "0 0/5 * * * ?",
+    "timezone_id": "UTC",
+    "pause_status": "UNPAUSED"
+  },
+  "tasks": [
+    {
+      "task_key": "run_orders_medallion_pipeline",
+      "pipeline_task": {
+        "pipeline_id": "5bdcf57d-29f2-491b-a15d-6ad776644904",
+        "full_refresh": false
+      }
+    }
+  ]
+}
