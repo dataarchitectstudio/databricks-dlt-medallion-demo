@@ -3,9 +3,9 @@ resources:
     orders_medallion_demo_every_5min:
       name: orders_medallion_demo_every_5min
       schedule:
-        quartz_cron_expression: "0 0/5 * * * ?"
+        quartz_cron_expression: "0 0 0 * * ?"
         timezone_id: UTC
-        pause_status: UNPAUSED
+        pause_status: PAUSED
       tasks:
         - task_key: run_orders_medallion_pipeline
           pipeline_task:
