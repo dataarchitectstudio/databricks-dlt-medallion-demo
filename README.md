@@ -37,12 +37,15 @@ Deployment is managed by a [Databricks Asset Bundle](https://docs.databricks.com
 
 ### Manual / local deploy
 
+The bundle doesn't hardcode a workspace host — it's picked up from your
+active auth (OAuth profile or `DATABRICKS_HOST`/`DATABRICKS_TOKEN` env vars),
+so the same `databricks.yml` works locally and in CI without editing.
+
 1. Authenticate with OAuth (no tokens needed):
    ```
    databricks auth login --host <your-workspace-url>
    ```
-2. Set your workspace host in `databricks.yml` (`targets.prod.workspace.host`),
-   then validate and deploy:
+2. Validate and deploy:
    ```
    databricks bundle validate --target prod
    databricks bundle deploy --target prod
