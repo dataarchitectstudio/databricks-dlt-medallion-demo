@@ -1,7 +1,7 @@
 resources:
   pipelines:
     orders_medallion_demo:
-      name: orders_medallion_demo
+      name: "orders_medallion_demo (deployed ${var.deploy_date})"
       catalog: workspace
       schema: dlt_demo
       serverless: true
