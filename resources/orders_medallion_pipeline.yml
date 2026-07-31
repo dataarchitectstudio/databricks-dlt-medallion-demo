@@ -1,0 +1,14 @@
+resources:
+  pipelines:
+    orders_medallion_demo:
+      name: orders_medallion_demo
+      catalog: workspace
+      schema: dlt_demo
+      serverless: true
+      continuous: false
+      photon: true
+      libraries:
+        - notebook:
+            path: ../notebooks/orders_medallion_pipeline.py
+      configuration:
+        pipelines.applyChangesPreviewEnabled: "true"

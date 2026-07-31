@@ -8,8 +8,14 @@ dummy `orders` data — no external source needed.
 
 ```
 notebooks/
-  orders_medallion_pipeline.py   # single notebook, all 3 layers
-pipeline_settings.json           # example DLT pipeline config
+  orders_medallion_pipeline.py     # single notebook, all 3 layers
+databricks.yml                     # Databricks Asset Bundle root config
+resources/
+  orders_medallion_pipeline.yml    # DLT pipeline resource
+  orders_medallion_job.yml         # scheduled job resource (every 5 min)
+.github/workflows/
+  databricks-ci.yml                # validates the bundle on every PR
+  databricks-cd.yml                # deploys the bundle on merge to main
 ```
 
 ## What it does
@@ -25,24 +31,70 @@ pipeline_settings.json           # example DLT pipeline config
 
 ## Deploying to Databricks
 
+Deployment is managed by a [Databricks Asset Bundle](https://docs.databricks.com/dev-tools/bundles/index.html)
+(`databricks.yml` + `resources/`), which defines the DLT pipeline and its
+5-minute schedule as code.
+
+### Manual / local deploy
+
 1. Authenticate with OAuth (no tokens needed):
    ```
    databricks auth login --host <your-workspace-url>
    ```
-2. Import the notebook into your workspace, e.g.:
+2. Set your workspace host in `databricks.yml` (`targets.prod.workspace.host`),
+   then validate and deploy:
    ```
-   databricks workspace import ./notebooks/orders_medallion_pipeline.py \
-     /Workspace/Users/<your-databricks-username>/databricks-dlt-medallion-demo/notebooks/orders_medallion_pipeline \
-     --language PYTHON --format SOURCE
+   databricks bundle validate --target prod
+   databricks bundle deploy --target prod
    ```
-3. Update the `notebook.path` in `pipeline_settings.json` to match your
-   workspace path, then create the pipeline:
+   This uploads the notebook and creates/updates the pipeline and job.
+3. Trigger a run from the Databricks UI (Workflows → Pipelines), or:
    ```
-   databricks pipelines create --json @pipeline_settings.json
+   databricks bundle run orders_medallion_demo_every_5min --target prod
    ```
-4. Trigger a run from the Databricks UI (Workflows → Pipelines) or via
-   `databricks pipelines start-update --pipeline-id <id>`.
 
-Alternatively, just paste the notebook contents directly into a new notebook
-in the Databricks workspace UI and attach it to a new DLT pipeline — no CLI
-needed.
+### CI/CD (GitHub Actions)
+
+- **`.github/workflows/databricks-ci.yml`** — on every pull request into
+  `main`, runs `databricks bundle validate` to catch config errors before
+  merge.
+- **`.github/workflows/databricks-cd.yml`** — on every push to `main` (i.e.
+  right after a PR is merged), runs `databricks bundle deploy --target prod`
+  to roll the change out to the workspace.
+
+Both workflows authenticate to Databricks with a personal access token (PAT)
+generated **for a service principal** (not a human user), read from GitHub
+Actions repository secrets — never committed or pasted anywhere:
+
+| Secret | Value |
+|---|---|
+| `DATABRICKS_HOST` | Your workspace URL, e.g. `https://<workspace>.cloud.databricks.com` |
+| `DATABRICKS_TOKEN` | PAT generated for the service principal |
+
+To set this up:
+
+1. In the Databricks workspace UI: **Settings → Identity and access →
+   Service principals → Add service principal**, e.g.
+   `github-actions-dlt-medallion`.
+2. Grant it permission to manage the target catalog/schema and to
+   create/manage DLT pipelines and jobs.
+3. Open the service principal → generate a PAT for it (workspace admin →
+   service principal → **Tokens** → **Generate new token**). Copy it
+   immediately — it's shown once.
+4. Add the two values above as secrets on the GitHub repo (Settings →
+   Secrets and variables → Actions), or via the `gh` CLI:
+   ```
+   gh secret set DATABRICKS_HOST
+   gh secret set DATABRICKS_TOKEN
+   ```
+   (`gh secret set` prompts for the value locally and uploads it encrypted —
+   it's never printed or stored in shell history.)
+5. (Recommended) In GitHub repo Settings → Environments, create a
+   `production` environment and add required reviewers, so every deploy
+   needs manual approval.
+6. Set an expiry/rotation reminder for the PAT — unlike OAuth M2M tokens,
+   it doesn't auto-refresh and will silently start failing deploys once it
+   expires.
+
+With this in place: open a PR → CI validates the bundle → merge the PR into
+`main` → CD deploys automatically to Databricks.

@@ -1,0 +1,14 @@
+bundle:
+  name: databricks-dlt-medallion-demo
+
+include:
+  - resources/*.yml
+
+targets:
+  prod:
+    mode: production
+    default: true
+    workspace:
+      host: https://<your-workspace-url>.cloud.databricks.com
+    run_as:
+      user_name: dataarchitectstudio@gmail.com
