@@ -1,6 +1,14 @@
 bundle:
   name: databricks-dlt-medallion-demo
 
+variables:
+  deploy_date:
+    description: >-
+      UTC date (YYYY-MM-DD) this deploy ran, injected by CI via --var.
+      Appended to resource display names only, to tell deploys apart in the
+      workspace UI. Does not affect workspace.root_path or resource identity.
+    default: "unset"
+
 include:
   - resources/*.yml
 
