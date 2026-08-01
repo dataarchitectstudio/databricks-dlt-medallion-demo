@@ -9,10 +9,13 @@ dummy `orders` data — no external source needed.
 ```
 notebooks/
   orders_medallion_pipeline.py     # single notebook, all 3 layers
-databricks.yml                     # Databricks Asset Bundle root config
+src/orders_medallion/              # Python package, packaged as a wheel
+  main.py                          # summarize_revenue() / main() entry point
+pyproject.toml                     # package metadata for the wheel build
+databricks.yml                     # Databricks Asset Bundle root config (incl. artifacts:)
 resources/
   orders_medallion_pipeline.yml    # DLT pipeline resource
-  orders_medallion_job.yml         # scheduled job resource (every 5 min)
+  orders_medallion_job.yml         # scheduled job: runs the pipeline, then the wheel task
 .github/workflows/
   databricks-ci.yml                # validates the bundle on every PR
   databricks-cd.yml                # deploys the bundle on merge to main
@@ -28,12 +31,17 @@ resources/
   `total_amount`.
 - **gold_revenue_by_product** / **gold_revenue_by_customer** — business
   aggregates (revenue, units, order counts) over completed orders only.
+- **orders_medallion (wheel package)** — `src/orders_medallion/main.py` reads
+  the two gold tables and prints a revenue summary. Packaged as a wheel via
+  `pyproject.toml` and run as a `python_wheel_task` in the job, right after
+  the DLT pipeline finishes. See "Packaging Python logic as a wheel" below.
 
 ## Deploying to Databricks
 
 Deployment is managed by a [Databricks Asset Bundle](https://docs.databricks.com/dev-tools/bundles/index.html)
-(`databricks.yml` + `resources/`), which defines the DLT pipeline and its
-5-minute schedule as code.
+(`databricks.yml` + `resources/`), which defines the DLT pipeline, the
+`orders_medallion` wheel, and the job that runs both on a daily schedule, as
+code.
 
 ### Manual / local deploy
 
@@ -50,11 +58,42 @@ so the same `databricks.yml` works locally and in CI without editing.
    databricks bundle validate --target prod
    databricks bundle deploy --target prod
    ```
-   This uploads the notebook and creates/updates the pipeline and job.
+   This uploads the notebook, builds and uploads the `orders_medallion`
+   wheel, and creates/updates the pipeline and job.
 3. Trigger a run from the Databricks UI (Workflows → Pipelines), or:
    ```
-   databricks bundle run orders_medallion_demo_every_5min --target prod
+   databricks bundle run orders_medallion_demo_every_day --target prod
    ```
+
+### Packaging Python logic as a wheel
+
+`src/orders_medallion/` is a regular Python package (`pyproject.toml` at the
+repo root, sources under `src/`). It's not deployed as loose files — the
+bundle packages it as a wheel and runs it as a job task:
+
+- **`databricks.yml`** declares an `artifacts:` entry (`orders_medallion`,
+  `type: whl`) with a `build:` command
+  (`python3 -m pip wheel . -w dist --no-deps`). On `bundle deploy`, the CLI
+  runs that command locally/in CI, then uploads the resulting
+  `dist/orders_medallion-0.1.0-py3-none-any.whl` to the workspace — the
+  wheel itself is never committed to git (`dist/`, `build/`, `*.egg-info/`
+  are gitignored).
+- **`resources/orders_medallion_job.yml`** adds a `summarize_revenue` task
+  (`depends_on` the pipeline task) with a `python_wheel_task` pointing at
+  `package_name: orders_medallion`, `entry_point: main`. Since this job runs
+  on serverless compute, the wheel is attached via a job-level
+  `environments:` block (`environment_key: default`,
+  `dependencies: [../dist/*.whl]`) rather than a cluster-level `libraries:`
+  list.
+- The task calls `orders_medallion.main:main()`, which reads
+  `gold_revenue_by_product` / `gold_revenue_by_customer` and prints a
+  summary — demonstrating shared/reusable logic that lives outside the DLT
+  notebook and can be unit tested independently.
+
+To add more reusable logic, drop new modules under
+`src/orders_medallion/`, add an entry point if needed, and reference it from
+a task's `python_wheel_task` — no changes to the `artifacts:` build command
+are required.
 
 ### CI/CD (GitHub Actions)
 

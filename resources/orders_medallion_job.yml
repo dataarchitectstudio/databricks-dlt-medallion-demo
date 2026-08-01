@@ -1,7 +1,7 @@
 resources:
   jobs:
-    orders_medallion_demo_every_5min:
-      name: "orders_medallion_demo_every_5min (deployed ${var.deploy_date})"
+    orders_medallion_demo_every_day:
+      name: "orders_medallion_demo_every_day (deployed ${var.deploy_date})"
       schedule:
         quartz_cron_expression: "0 0 0 * * ?"
         timezone_id: UTC
@@ -11,3 +11,17 @@ resources:
           pipeline_task:
             pipeline_id: ${resources.pipelines.orders_medallion_demo.id}
             full_refresh: false
+
+        - task_key: summarize_revenue
+          depends_on:
+            - task_key: run_orders_medallion_pipeline
+          environment_key: default
+          python_wheel_task:
+            package_name: orders_medallion
+            entry_point: main
+      environments:
+        - environment_key: default
+          spec:
+            client: "2"
+            dependencies:
+              - ../dist/*.whl

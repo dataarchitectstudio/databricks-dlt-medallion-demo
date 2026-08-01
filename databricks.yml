@@ -9,6 +9,12 @@ variables:
       workspace UI. Does not affect workspace.root_path or resource identity.
     default: "unset"
 
+artifacts:
+  orders_medallion:
+    type: whl
+    path: .
+    build: python3 setup.py bdist_wheel
+
 include:
   - resources/*.yml
 
